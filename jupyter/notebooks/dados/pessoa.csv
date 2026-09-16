@@ -1,4 +1,4 @@
-id,nome,cnh_id,numero_endereco,rua,cpf
+id,nome,detran_id,numero_endereco,rua,cpf
 10000,Christoper Peteuil,993845,624,Bankhall Ave,747714076
 10007,Kourtney Calderwood,861794,2791,Gustavus Blvd,477972044
 10010,Muoi Cary,385336,741,Avenida Ministro José Américo de Almeida,828638512
