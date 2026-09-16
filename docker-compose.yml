@@ -4,9 +4,7 @@
 # Sobe um lakehouse simples e pré-conectado — só armazenamento (MinIO) e
 # Jupyter com pandas puro (sem pacote nenhum pré-instalado além das libs
 # padrão), para manter o foco didático na arquitetura medalhão
-# (bronze -> silver -> gold) sem depender de motor de SQL nenhum (sem
-# Trino, sem Hive Metastore, sem Postgres — ver README, "Por que não
-# tem mais Trino" / "Por que não tem mais Postgres"):
+# (bronze -> silver -> gold) sem depender de motor de SQL nenhum:
 #
 #   MinIO (armazenamento S3-compatível) -- é a ÚNICA peça de
 #   armazenamento/estado deste laboratório.
@@ -33,7 +31,7 @@ services:
   # MINIO — armazenamento de objetos S3-compatível. As camadas
   # bronze/silver/gold são pastas (prefixos) dentro de um único bucket
   # "lakehouse" — é a ÚNICA peça de armazenamento/estado deste
-  # laboratório (sem Postgres, sem Trino, sem Hive Metastore).
+  # laboratório.
   # -------------------------------------------------------------
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
