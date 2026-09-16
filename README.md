@@ -5,6 +5,22 @@ O aluno não precisa entender Docker — só rodar um comando e abrir o Jupyter.
 
 Só armazenamento (MinIO) e Python (Jupyter) — sem motor de SQL nenhum (sem Trino, ver "Por que não tem mais Trino" abaixo), sem orquestrador, e sem Postgres (ver "Por que não tem mais Postgres" abaixo). Não tem pipeline nenhum rodando sozinho: `bronze`, `silver` e `gold` nascem todas **vazias** assim que o ambiente sobe (ver "Por que não tem mais um pipeline automático" abaixo) — tudo que existir nelas é o que o aluno construiu numa célula de notebook, com pandas puro. Um único notebook, `jupyter/notebooks/investigacao.ipynb`, guia o aluno do início ao fim: ler os CSVs crus de `dados/` (ao lado do notebook), publicar como bronze, investigar livremente, e publicar a resposta final na silver.
 
+## Instalando o Docker (Windows/Mac)
+
+Tudo neste laboratório roda dentro de containers Docker — é a única coisa que precisa estar instalada na sua máquina.
+
+**Windows:**
+1. Baixe o **Docker Desktop** em [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) e rode o instalador.
+2. O instalador pode pedir pra habilitar o **WSL2** (Windows Subsystem for Linux) — aceite, é um requisito do Docker Desktop no Windows. Se pedir reiniciar o computador, reinicie.
+3. Depois de instalado, abra o **Docker Desktop** pelo menu Iniciar e espere o ícone da baleia (na bandeja do sistema, perto do relógio) ficar estável — é o sinal de que o Docker está rodando. Deixe o Docker Desktop aberto em segundo plano.
+
+**Mac:**
+1. Baixe o **Docker Desktop** em [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) — escolha a versão certa pro seu processador (Apple Silicon/M1-M2-M3 ou Intel; se não souber qual é o seu, veja no menu Apple (canto superior esquerdo) → "Sobre Este Mac").
+2. Abra o `.dmg` baixado e arraste o Docker pra pasta Aplicativos.
+3. Abra o **Docker.app** (Launchpad ou Spotlight) e espere o ícone da baleia aparecer estável na barra de menu (topo da tela) — é o sinal de que o Docker está rodando. Deixe o Docker Desktop aberto em segundo plano.
+
+Com o Docker Desktop rodando (baleia estável na bandeja/barra de menu), abra um terminal (PowerShell no Windows, Terminal no Mac) na pasta deste projeto e siga o "Como subir" abaixo. **A tarefa em si é feita inteiramente dentro do Jupyter** (http://localhost:8888, aberto depois do `docker compose up`) — abra `investigacao.ipynb` lá e siga o notebook do início ao fim.
+
 ## Como subir
 
 ```bash
@@ -26,7 +42,7 @@ Nenhum serviço pede credencial do aluno, com **uma única exceção**: o MinIO 
 
 ## Roteiro sugerido para a aula
 
-Um único notebook, `investigacao.ipynb` — "Mistério em João Pessoa" — cobre tudo: a demo em aula e a tarefa de casa são o mesmo arquivo, só em pontos diferentes.
+Um único notebook, `investigacao.ipynb` — "Mistério em SQL City" — cobre tudo: a demo em aula e a tarefa de casa são o mesmo arquivo, só em pontos diferentes.
 
 1. Suba o ambiente antes da aula começar (`docker compose up -d --build`) — assim o tempo de download/build não consome tempo de aula. Quando o comando devolver o prompt, o bucket `lakehouse` já existe, com `bronze`/`silver`/`gold` vazias.
 2. Abra o **MinIO Console** (http://localhost:9001) e mostre as pastas do bucket `lakehouse`, todas vazias — é a fonte de tudo neste laboratório: arquivo que chega de fora, não um banco relacional vivo, e nada é construído sem alguém rodar uma célula.
@@ -38,7 +54,7 @@ Um único notebook, `investigacao.ipynb` — "Mistério em João Pessoa" — cob
 
 O aluno termina `investigacao.ipynb` em casa: publica as outras 5 tabelas como bronze (mesmo padrão do exemplo visto em aula), investiga livremente com pandas (`pd.read_parquet` + `merge`/filtros) até achar 1 suspeito, e publica a conclusão como `silver.resposta_caso`.
 
-Dá pra resolver inteira só com **pandas + MinIO + Jupyter** (`pd.read_csv`/`DataFrame.to_parquet`/`pd.read_parquet`, todos apontando pro MinIO via `storage_options`) — não tem SQL em lugar nenhum deste projeto. O entregável final é a tabela `silver.resposta_caso` (`s3://lakehouse/silver/resposta_caso.parquet`), que dá pra conferir com `pd.read_parquet(...)` ou direto pelo MinIO Console. Material do instrutor (gerador dos dados, solver de referência, gabarito) fica em `tarefa-instrutor/`, fora de `jupyter/notebooks/` — o aluno nunca vê essa pasta.
+Dá pra resolver inteira só com **pandas + MinIO + Jupyter** (`pd.read_csv`/`DataFrame.to_parquet`/`pd.read_parquet`, todos apontando pro MinIO via `storage_options`) — não tem SQL em lugar nenhum deste projeto. O entregável final é a tabela `silver.resposta_caso` (`s3://lakehouse/silver/resposta_caso.parquet`), que dá pra conferir com `pd.read_parquet(...)` ou direto pelo MinIO Console. O gabarito (resposta esperada e caminho de solução) fica em `tarefa-instrutor/GABARITO.md`, fora de `jupyter/notebooks/` — o aluno nunca vê essa pasta.
 
 ## Arquitetura
 
@@ -67,7 +83,7 @@ Uma versão anterior deste projeto tinha um Postgres com dupla função: (1) sim
 Os dois papéis saíram:
 
 - **Metastore**: não existe mais catálogo SQL nenhum neste projeto (ver seção seguinte), então também não existe mais metastore pra guardar.
-- **Fonte "lojinha"**: em vez de simular um sistema transacional vivo, todo dado deste laboratório entra pela mesma porta — um arquivo cru lido direto do disco (os 6 CSVs de `dados/`, da tarefa "Mistério em João Pessoa"). Isso simplifica o laboratório: só existe um jeito de dado entrar, não dois.
+- **Fonte "lojinha"**: em vez de simular um sistema transacional vivo, todo dado deste laboratório entra pela mesma porta — um arquivo cru lido direto do disco (os 6 CSVs de `dados/`, da tarefa "Mistério em SQL City" — dados originais do [SQL Murder Mystery](https://github.com/NUKnightLab/sql-mysteries), ver "Créditos" abaixo). Isso simplifica o laboratório: só existe um jeito de dado entrar, não dois.
 
 Se um dia quiser trazer de volta uma fonte relacional "ao vivo" (por exemplo, pra mostrar extração via JDBC de um sistema transacional de verdade), o caminho é adicionar um serviço de banco no `docker-compose.yml` e ler dele com `pandas.read_sql(...)` (via `sqlalchemy`/`psycopg2`) dentro de um notebook — sem precisar de nenhum motor de SQL adicional pra isso, já que quem lê seria o próprio pandas.
 
@@ -131,9 +147,13 @@ docker compose down -v   # -v também apaga os dados do MinIO
 docker compose up -d --build
 ```
 
+## Créditos
+
+O caso de `investigacao.ipynb` ("Mistério em SQL City") usa os dados originais do [**SQL Murder Mystery**](https://github.com/NUKnightLab/sql-mysteries), criado por Joon Park e Cathy He na Northwestern University Knight Lab — mesmas tabelas, mesmas pistas, mesma solução. O conteúdo original (texto, dados) é distribuído sob [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); aqui ele foi só reempacotado nos 6 CSVs de `dados/` e adaptado pra ser resolvido com pandas + MinIO em vez de SQL — sem mudar os dados nem as pistas em si. Se você reusar/redistribuir este laboratório, mantenha esse crédito.
+
 ## Status
 
-A versão anterior deste ambiente (com Postgres, Trino, Hive Metastore, DBeaver-web, uma "lojinha" simulada como fonte, um pipeline automático construindo uma bronze/silver/gold demo, e um segundo notebook exploratório separado da tarefa) foi validada em 08/2026 de ponta a ponta. Em 09/2026, a arquitetura mudou pra remover Postgres, Trino + DBeaver-web, o pipeline automático (`pipeline-init`), o passo de `landing`, o pacote `utils` (só pandas puro + `storage_options` daqui em diante), e por fim o segundo notebook — ver as seções "Por que não tem mais..." acima — o projeto ficou reduzido a **MinIO + Jupyter + pandas**, sem motor de SQL nenhum e sem nada rodando sozinho: bronze/silver/gold nascem vazias, e um único notebook (`investigacao.ipynb`, ao lado de `dados/`) constrói tudo lendo os CSVs direto do disco e publicando direto na bronze, cada tabela como 1 arquivo Parquet flat (`<layer>/<tabela>.parquet`). Essa mudança ainda **não foi revalidada de ponta a ponta rodando os containers de verdade** — antes de usar em aula, rode:
+A versão anterior deste ambiente (com Postgres, Trino, Hive Metastore, DBeaver-web, uma "lojinha" simulada como fonte, um pipeline automático construindo uma bronze/silver/gold demo, e um segundo notebook exploratório separado da tarefa) foi validada em 08/2026 de ponta a ponta. Em 09/2026, a arquitetura mudou pra remover Postgres, Trino + DBeaver-web, o pipeline automático (`pipeline-init`), o passo de `landing`, o pacote `utils` (só pandas puro + `storage_options` daqui em diante), e por fim o segundo notebook — ver as seções "Por que não tem mais..." acima — o projeto ficou reduzido a **MinIO + Jupyter + pandas**, sem motor de SQL nenhum e sem nada rodando sozinho: bronze/silver/gold nascem vazias, e um único notebook (`investigacao.ipynb`, ao lado de `dados/`) constrói tudo lendo os CSVs direto do disco e publicando direto na bronze, cada tabela como 1 arquivo Parquet flat (`<layer>/<tabela>.parquet`). Também nessa data, o caso fictício foi trocado pelos dados originais do [SQL Murder Mystery](https://github.com/NUKnightLab/sql-mysteries) (ver "Créditos" acima) — mesma estrutura de 6 tabelas, agora com o dataset real (tabelas bem maiores, ~10 mil pessoas). Essa mudança ainda **não foi revalidada de ponta a ponta rodando os containers de verdade** — antes de usar em aula, rode:
 
 ```bash
 docker compose down -v
