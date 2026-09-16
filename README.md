@@ -42,7 +42,7 @@ Nenhum serviço pede credencial do aluno, com **uma única exceção**: o MinIO 
 
 ## Roteiro sugerido para a aula
 
-Um único notebook, `investigacao.ipynb` — "Mistério em SQL City" — cobre tudo: a demo em aula e a tarefa de casa são o mesmo arquivo, só em pontos diferentes.
+Um único notebook, `investigacao.ipynb` — "Mistério em João Pessoa" — cobre tudo: a demo em aula e a tarefa de casa são o mesmo arquivo, só em pontos diferentes.
 
 1. Suba o ambiente antes da aula começar (`docker compose up -d --build`) — assim o tempo de download/build não consome tempo de aula. Quando o comando devolver o prompt, o bucket `lakehouse` já existe, com `bronze`/`silver`/`gold` vazias.
 2. Abra o **MinIO Console** (http://localhost:9001) e mostre as pastas do bucket `lakehouse`, todas vazias — é a fonte de tudo neste laboratório: arquivo que chega de fora, não um banco relacional vivo, e nada é construído sem alguém rodar uma célula.
@@ -83,7 +83,7 @@ Uma versão anterior deste projeto tinha um Postgres com dupla função: (1) sim
 Os dois papéis saíram:
 
 - **Metastore**: não existe mais catálogo SQL nenhum neste projeto (ver seção seguinte), então também não existe mais metastore pra guardar.
-- **Fonte "lojinha"**: em vez de simular um sistema transacional vivo, todo dado deste laboratório entra pela mesma porta — um arquivo cru lido direto do disco (os 6 CSVs de `dados/`, da tarefa "Mistério em SQL City" — dados originais do [SQL Murder Mystery](https://github.com/NUKnightLab/sql-mysteries), ver "Créditos" abaixo). Isso simplifica o laboratório: só existe um jeito de dado entrar, não dois.
+- **Fonte "lojinha"**: em vez de simular um sistema transacional vivo, todo dado deste laboratório entra pela mesma porta — um arquivo cru lido direto do disco (os 6 CSVs de `dados/`, da tarefa "Mistério em João Pessoa" — dados originais do [SQL Murder Mystery](https://github.com/NUKnightLab/sql-mysteries), com a cidade/nomes localizados, ver "Créditos" abaixo). Isso simplifica o laboratório: só existe um jeito de dado entrar, não dois.
 
 Se um dia quiser trazer de volta uma fonte relacional "ao vivo" (por exemplo, pra mostrar extração via JDBC de um sistema transacional de verdade), o caminho é adicionar um serviço de banco no `docker-compose.yml` e ler dele com `pandas.read_sql(...)` (via `sqlalchemy`/`psycopg2`) dentro de um notebook — sem precisar de nenhum motor de SQL adicional pra isso, já que quem lê seria o próprio pandas.
 
@@ -149,7 +149,7 @@ docker compose up -d --build
 
 ## Créditos
 
-O caso de `investigacao.ipynb` ("Mistério em SQL City") usa os dados originais do [**SQL Murder Mystery**](https://github.com/NUKnightLab/sql-mysteries), criado por Joon Park e Cathy He na Northwestern University Knight Lab — mesmas tabelas, mesmas pistas, mesma solução. O conteúdo original (texto, dados) é distribuído sob [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); aqui ele foi só reempacotado nos 6 CSVs de `dados/` e adaptado pra ser resolvido com pandas + MinIO em vez de SQL — sem mudar os dados nem as pistas em si. Se você reusar/redistribuir este laboratório, mantenha esse crédito.
+O caso de `investigacao.ipynb` ("Mistério em João Pessoa") usa os dados originais do [**SQL Murder Mystery**](https://github.com/NUKnightLab/sql-mysteries), criado por Joon Park e Cathy He na Northwestern University Knight Lab — mesmas tabelas, mesmas pistas, mesma solução. O conteúdo original (texto, dados) é distribuído sob [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); aqui ele foi reempacotado nos 6 CSVs de `dados/`, adaptado pra ser resolvido com pandas + MinIO em vez de SQL, e localizado — a cidade (SQL City → João Pessoa), as ruas e os nomes das pessoas envolvidas na solução viraram referências brasileiras/regionais, mas os depoimentos (`depoimento.csv`) e o restante dos dados seguem originais, em inglês. Se você reusar/redistribuir este laboratório, mantenha esse crédito.
 
 ## Status
 
