@@ -1,74 +1,39 @@
 # =====================================================================
 # LABORATÓRIO DE DATA LAKEHOUSE
 # =====================================================================
-# Sobe um lakehouse completo e pré-conectado — só armazenamento e
-# consulta, sem orquestrador, para manter o foco didático:
+# Sobe um lakehouse simples e pré-conectado — só armazenamento (MinIO) e
+# um pacote Python pronto (`utils`), para manter o foco didático na
+# arquitetura medalhão (bronze -> silver -> gold) sem depender de motor
+# de SQL nenhum (sem Trino, sem Hive Metastore, sem Postgres — ver
+# README, "Por que não tem mais Trino" / "Por que não tem mais
+# Postgres"):
 #
-#   Postgres (fonte OLTP simulada + metastore) ─┐
-#                                                ├─> Hive Metastore ─┐
-#   MinIO (armazenamento S3-compatível) ─────────┘                  ├─> Trino (SQL)
-#                                                                    │
-#   pipeline-init (trino/init/construir_pipeline.py) constrói bronze -> ┘
-#   silver -> gold sozinho, uma vez, assim que tudo acima está pronto —
-#   igual o postgres/init/*.sql prepara o Postgres, mas pro Trino. É
-#   infraestrutura, não algo que o aluno edita ou reroda célula a
-#   célula; o mesmo script pode ser rodado de novo na mão de dentro do
-#   Jupyter (ver README) se quiser atualizar o lakehouse depois de
-#   inserir dado novo no Postgres.
+#   MinIO (armazenamento S3-compatível) -- é a ÚNICA peça de
+#   armazenamento/estado deste laboratório.
 #
-#   Jupyter (lakehouse_kit editável dentro de notebooks/; notebook
-#            exploratório pra consultar e visualizar o que o pipeline
-#            já construiu)
-#
-#   DBeaver-web (CloudBeaver), à parte: cliente SQL web já conectado
-#   no Postgres, direto no schema "schema" — pra inspecionar a fonte
-#   sem precisar do Jupyter nem instalar nada na máquina do aluno.
+#   Jupyter (utils editável dentro de notebooks/) -- bronze, silver e
+#   gold nascem todas VAZIAS (só a "pasta" existe, criada pelo
+#   minio-init). Não tem pipeline nenhum rodando sozinho: tudo que
+#   existir em bronze/silver/gold é o que o aluno construiu numa célula
+#   do único notebook deste laboratório -- ver
+#   `jupyter/notebooks/investigacao.ipynb` -- tudo com pandas, sem SQL
+#   nenhum.
 #
 # Para o aluno, o único comando necessário é:
 #   docker compose up -d
 #
 # URLs depois de subir (nenhuma pede credencial do aluno, exceto o
-# Console do MinIO — limitação do próprio MinIO, ver README):
-#   Jupyter      -> http://localhost:8888  (sem login)
-#   MinIO        -> http://localhost:9001  (console web, login: ver .env)
-#   Trino        -> http://localhost:8082  (UI de queries, sem login)
-#   DBeaver-web  -> http://localhost:8978  (sem login, já conectado)
+# Console do MinIO -- limitação do próprio MinIO, ver README):
+#   Jupyter -> http://localhost:8888  (sem login)
+#   MinIO   -> http://localhost:9001  (console web, login: ver .env)
 # =====================================================================
 
 services:
-
   # -------------------------------------------------------------
-  # POSTGRES — dupla função:
-  #  1) simula um sistema transacional (loja) que vira a origem dos dados
-  #  2) guarda os metadados do Hive Metastore (catálogo de tabelas do Trino)
-  # -------------------------------------------------------------
-  postgres:
-    image: postgres:16.14
-    container_name: data_lakehouse_101-postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./postgres/init:/docker-entrypoint-initdb.d
-    healthcheck:
-      # -d explícito porque, sem ele, o pg_isready tenta conectar num banco
-      # com o mesmo nome do usuário (aqui, POSTGRES_USER, "trilha") — que
-      # não existe — e isso polui o log com "FATAL: database ... does
-      # not exist" a cada checagem, mesmo o container estando saudável.
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # -------------------------------------------------------------
-  # MINIO — armazenamento de objetos S3-compatível.
-  # As camadas bronze/silver/gold, mais uma pasta "landing" (zona de
-  # pouso pra arquivo cru que o aluno traz de fora — ver lakehouse_kit),
-  # são pastas (prefixos) dentro de um único bucket "lakehouse".
+  # MINIO — armazenamento de objetos S3-compatível. As camadas
+  # bronze/silver/gold são pastas (prefixos) dentro de um único bucket
+  # "lakehouse" — é a ÚNICA peça de armazenamento/estado deste
+  # laboratório (sem Postgres, sem Trino, sem Hive Metastore).
   # -------------------------------------------------------------
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -95,8 +60,9 @@ services:
       retries: 10
 
   # -------------------------------------------------------------
-  # MINIO-INIT — tarefa única: cria o bucket e as "pastas" landing,
-  # bronze, silver e gold para já nascerem visíveis no console.
+  # MINIO-INIT — tarefa única: cria o bucket e as "pastas" bronze,
+  # silver e gold para já nascerem visíveis no console — todas vazias;
+  # nada aqui constrói dado nenhum, é só estrutura.
   # -------------------------------------------------------------
   minio-init:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
@@ -113,89 +79,17 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET}
 
   # -------------------------------------------------------------
-  # HIVE METASTORE — catálogo que registra, para o Trino, quais
-  # tabelas existem, suas colunas e onde estão os arquivos no MinIO.
-  # É a peça "invisível" que transforma "arquivos soltos em S3" em
-  # "tabelas consultáveis por SQL". Metadados guardados no Postgres.
-  # -------------------------------------------------------------
-  hive-metastore:
-    image: starburstdata/hive:3.1.2-e.18
-    # Testada e funcionando em 08/2026. Se uma tag futura não existir mais
-    # ou mudar de comportamento, veja a seção "Troubleshooting" no README.
-    container_name: data_lakehouse_101-hive-metastore
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-    environment:
-      HIVE_METASTORE_DRIVER: org.postgresql.Driver
-      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://postgres:5432/metastore_db
-      HIVE_METASTORE_USER: ${POSTGRES_USER}
-      HIVE_METASTORE_PASSWORD: ${POSTGRES_PASSWORD}
-      # Não é usada por nenhuma tabela deste projeto (bronze/silver/gold
-      # sempre declaram sua própria location) — é só o local padrão do
-      # Hive Metastore para schemas/tabelas criados sem location
-      # explícita. Sem isso, esse caso cairia num path local inválido
-      # dentro do container e quebraria com um erro confuso.
-      HIVE_METASTORE_WAREHOUSE_DIR: s3://${MINIO_BUCKET}/warehouse/
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      S3_PATH_STYLE_ACCESS: "true"
-      REGION: ""
-      S3_BUCKET: ""
-      # O script de entrada dessa imagem checa com `test -v` (existe a
-      # variável?) sob `set -e` — precisam estar declaradas mesmo vazias,
-      # senão o container aborta na inicialização.
-      GOOGLE_CLOUD_KEY_FILE_PATH: ""
-      AZURE_ADL_CLIENT_ID: ""
-      AZURE_ADL_CREDENTIAL: ""
-      AZURE_ADL_REFRESH_URL: ""
-      AZURE_ABFS_STORAGE_ACCOUNT: ""
-      AZURE_ABFS_ACCESS_KEY: ""
-      AZURE_WASB_STORAGE_ACCOUNT: ""
-      AZURE_ABFS_OAUTH: ""
-      AZURE_ABFS_OAUTH_TOKEN_PROVIDER: ""
-      AZURE_ABFS_OAUTH_CLIENT_ID: ""
-      AZURE_ABFS_OAUTH_SECRET: ""
-      AZURE_ABFS_OAUTH_ENDPOINT: ""
-      AZURE_WASB_ACCESS_KEY: ""
-    ports:
-      - "9083:9083"
-
-  # -------------------------------------------------------------
-  # TRINO — motor de consulta SQL. Enxerga só um catálogo, "lakehouse":
-  # as camadas bronze/silver/gold no MinIO (via Hive Metastore). De
-  # propósito sem um catálogo "postgres" apontando pra fonte ao vivo —
-  # isso já foi removido (ver trino/etc/catalog/), pra manter o Trino
-  # focado só no data lake. O Postgres "fonte" continua acessível
-  # normalmente, só que direto (via `lh.postgres()` no Jupyter ou a
-  # conexão "postgres" do DBeaver-web), não através do Trino.
-  # -------------------------------------------------------------
-  trino:
-    image: trinodb/trino:483
-    container_name: data_lakehouse_101-trino
-    depends_on:
-      - hive-metastore
-    ports:
-      # 8082 no host (não 8080) para não colidir com outros projetos
-      # Docker que já usem essa porta (ex.: outro Airflow local).
-      - "8082:8080"
-    volumes:
-      - ./trino/etc:/etc/trino
-
-  # -------------------------------------------------------------
-  # JUPYTER — laboratório exploratório do aluno. Já vem com o pacote
-  # `lakehouse_kit` pronto: `import lakehouse_kit as lh` e todas as
-  # conexões (Trino, MinIO, Postgres) já funcionam. O pipeline
-  # bronze -> silver -> gold já foi construído sozinho pelo
-  # `pipeline-init` (ver trino/init/construir_pipeline.py) — aqui é só
-  # pra explorar o resultado (notebook `explorando_o_lakehouse.ipynb`).
+  # JUPYTER — laboratório do aluno, e único lugar onde qualquer dado é
+  # construído neste projeto. Já vem com o pacote `utils` pronto:
+  # `import utils as lh` e a conexão com o MinIO já funciona. Um único
+  # notebook, `investigacao.ipynb` (o mistério — ver README) — lê os
+  # CSVs crus de `dados/`, constrói bronze do zero, e termina
+  # publicando a resposta do caso na silver. Sem pipeline nenhum pronto
+  # por trás.
   #
-  # `lakehouse_kit` fica dentro de `notebooks/` de propósito (não
-  # instalado "escondido" em outro lugar da imagem): o aluno vê a pasta
-  # no explorador de arquivos do JupyterLab e pode abrir/editar o
+  # `utils` fica dentro de `notebooks/` de propósito (não instalado
+  # "escondido" em outro lugar da imagem): o aluno vê a pasta no
+  # explorador de arquivos do JupyterLab e pode abrir/editar o
   # `__init__.py` — mudou algo ali, é só rodar de novo a célula do
   # `import` (ou reiniciar o kernel).
   #
@@ -206,14 +100,17 @@ services:
   # propósito pra não depender de um "padrão" que pode mudar em outra
   # versão — e restringe a raiz do explorador de arquivos a
   # `/home/jovyan/notebooks` (`--ServerApp.root_dir`), pra não aparecer
-  # nada além dos notebooks: nem a pasta `trino-init` (montada abaixo),
-  # nem arquivos de configuração do próprio Jupyter. Isso só afeta o
-  # que a UI do navegador de arquivos e a API de conteúdo do Jupyter
-  # enxergam — comandos rodados pelo kernel (`!python /home/jovyan/
-  # trino-init/...`) continuam funcionando normalmente, porque isso
-  # acontece pelo lado do sistema operacional, não pela API do Jupyter
-  # (testado). Só faz sentido sem senha porque a porta 8888 não é
-  # exposta pra fora da máquina do aluno — ver README.
+  # nada além dos notebooks: nem arquivos de configuração do próprio
+  # Jupyter, nem o resto do home do usuário (`/home/jovyan`). Isso só
+  # afeta o que a UI do navegador de arquivos e a API de conteúdo do
+  # Jupyter enxergam — comandos rodados pelo kernel (célula com `!...`,
+  # ou o terminal do JupyterLab) continuam acessando o resto do sistema
+  # de arquivos normalmente. Só faz sentido sem senha porque a porta
+  # 8888 não é exposta pra fora da máquina do aluno — ver README.
+  #
+  # Espera o `minio-init` terminar (bucket + pastas bronze/silver/gold
+  # já existem) antes de subir — senão a primeira célula que tentar
+  # gravar algo no MinIO falharia com "bucket não existe".
   # -------------------------------------------------------------
   jupyter:
     build: ./jupyter
@@ -222,151 +119,21 @@ services:
       start-notebook.sh --ServerApp.token='' --ServerApp.password=''
       --ServerApp.default_url='/lab' --ServerApp.root_dir='/home/jovyan/notebooks'
     depends_on:
-      - trino
-      - minio
-      - postgres
+      minio-init:
+        condition: service_completed_successfully
     environment:
-      LAKEHOUSE_TRINO_HOST: trino
       LAKEHOUSE_S3_ENDPOINT: http://minio:9000
       LAKEHOUSE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
       LAKEHOUSE_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       LAKEHOUSE_S3_BUCKET: ${MINIO_BUCKET}
-      LAKEHOUSE_PG_HOST: postgres
-      LAKEHOUSE_PG_USER: ${POSTGRES_USER}
-      LAKEHOUSE_PG_PASSWORD: ${POSTGRES_PASSWORD}
-      LAKEHOUSE_PG_DB: ${POSTGRES_DB}
-      LAKEHOUSE_PG_SCHEMA: ${POSTGRES_SCHEMA}
     ports:
       - "8888:8888"
     volumes:
-      # jupyter/notebooks/lakehouse_kit/ vem junto (é uma subpasta
-      # daqui) — é assim que o aluno vê e edita o pacote pelo próprio
-      # JupyterLab, e é assim que `import lakehouse_kit` funciona sem
-      # PYTHONPATH nenhum (ver comentário no Dockerfile).
+      # jupyter/notebooks/utils/ vem junto (é uma subpasta daqui) — é
+      # assim que o aluno vê e edita o pacote pelo próprio JupyterLab, e
+      # é assim que `import utils` funciona sem PYTHONPATH nenhum (ver
+      # comentário no Dockerfile).
       - ./jupyter/notebooks:/home/jovyan/notebooks
-      # Só leitura: dá pra rodar o pipeline de novo na mão (terminal do
-      # JupyterLab, ou `!python ...` numa célula) sem editar o script
-      # por engano — ver trino/init/construir_pipeline.py.
-      - ./trino/init:/home/jovyan/trino-init:ro
-
-  # -------------------------------------------------------------
-  # PIPELINE-INIT — roda trino/init/construir_pipeline.py uma vez,
-  # sozinho, em background, assim que Trino/Postgres/MinIO ficam
-  # prontos. Existe só pra garantir que bronze/silver/gold já existam
-  # quando o aluno abrir o DBeaver-web ou o Trino, sem precisar rodar
-  # nada na mão antes — o mesmo papel que `postgres/init/*.sql` cumpre
-  # pro Postgres, só que via um serviço próprio (o Trino não tem um
-  # mecanismo de "rodar isso na primeira subida" embutido como o
-  # Postgres tem). Por ser um script (não mais um notebook), não tem
-  # "output" nenhum pra se preocupar em sujar — só efeitos reais
-  # (arquivos no MinIO, tabelas no Trino/Hive Metastore).
-  #
-  # Idempotente (cada tabela é sempre DROP + CREATE), então rodar de
-  # novo não tem problema — inclusive é assim que se atualiza o
-  # lakehouse depois de inserir dado novo no Postgres (ver README).
-  # -------------------------------------------------------------
-  pipeline-init:
-    build: ./jupyter
-    container_name: data_lakehouse_101-pipeline-init
-    depends_on:
-      trino:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    environment:
-      LAKEHOUSE_TRINO_HOST: trino
-      LAKEHOUSE_S3_ENDPOINT: http://minio:9000
-      LAKEHOUSE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      LAKEHOUSE_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      LAKEHOUSE_S3_BUCKET: ${MINIO_BUCKET}
-      LAKEHOUSE_PG_HOST: postgres
-      LAKEHOUSE_PG_USER: ${POSTGRES_USER}
-      LAKEHOUSE_PG_PASSWORD: ${POSTGRES_PASSWORD}
-      LAKEHOUSE_PG_DB: ${POSTGRES_DB}
-      LAKEHOUSE_PG_SCHEMA: ${POSTGRES_SCHEMA}
-      # Este serviço não monta ./jupyter/notebooks inteiro (só o
-      # trino-init abaixo) — sem PYTHONPATH, `import lakehouse_kit` no
-      # construir_pipeline.py não acharia o pacote montado logo abaixo,
-      # porque `python3 /caminho/script.py` resolve imports a partir da
-      # pasta do script, não do cwd do processo (diferente do kernel
-      # interativo do serviço `jupyter`, que não precisa disso).
-      PYTHONPATH: /home/jovyan
-    volumes:
-      - ./trino/init:/home/jovyan/trino-init:ro
-      # Read-only: este serviço só importa lakehouse_kit, nunca o edita
-      # — é o mesmo código-fonte que o aluno vê/edita no JupyterLab (ver
-      # comentário no serviço `jupyter` acima), montado à parte porque
-      # este serviço não monta ./jupyter/notebooks inteiro.
-      - ./jupyter/notebooks/lakehouse_kit:/home/jovyan/lakehouse_kit:ro
-    command: python3 /home/jovyan/trino-init/construir_pipeline.py
-
-  # -------------------------------------------------------------
-  # DBEAVER-WEB (CloudBeaver) — cliente SQL web para o aluno inspecionar
-  # o Postgres "fonte" e o Trino sem precisar instalar nada na máquina
-  # dele. Sobe com duas conexões pré-configuradas e visíveis para
-  # qualquer um que abrir a página (acesso anônimo, sem tela de login)
-  # — ver dbeaver/initial-data-sources.conf:
-  #   - "postgres": direto no schema "schema" (a fonte) — árvore de
-  #     navegação restrita a esse schema e suas 4 tabelas, o resto
-  #     (public, roles, extensions etc.) fica escondido de propósito.
-  #   - "trino": direto no catálogo "lakehouse" (bronze/silver/gold)
-  # O aluno só abre http://localhost:8978 e clica na conexão que quiser.
-  # (o nome "schema" está fixo em dbeaver/initial-data-sources.conf, que
-  # não lê o .env — ver POSTGRES_SCHEMA lá para o porquê)
-  #
-  # `supportsCustomConnections` fica com o padrão da imagem (desligado):
-  # o aluno não consegue criar outras conexões, só usar a que já existe.
-  #
-  # dbeaver/cloudbeaver.conf desliga o ícone de chat com IA do CloudBeaver
-  # (feature "ai") — sem valor didático aqui, e evita pedir uma API key de
-  # LLM só pra abrir o cliente SQL. Ver comentário no topo desse arquivo.
-  #
-  # Só sobe depois que `pipeline-init` termina com sucesso — de propósito,
-  # pra garantir que bronze/silver/gold já existam antes mesmo da porta
-  # 8978 aceitar conexão (o mesmo padrão que `minio-init` já usa aqui
-  # pra `hive-metastore`). Se `pipeline-init` falhar, o DBeaver-web não
-  # sobe; ver Troubleshooting no README pra como recuperar sem perder
-  # o resto do ambiente.
-  # -------------------------------------------------------------
-  dbeaver:
-    image: dbeaver/cloudbeaver:26.1.4
-    container_name: data_lakehouse_101-dbeaver
-    depends_on:
-      postgres:
-        condition: service_healthy
-      pipeline-init:
-        condition: service_completed_successfully
-    environment:
-      # Só usadas para destravar o assistente de primeira configuração
-      # (sem isso o CloudBeaver fica esperando um admin configurar pela
-      # UI). Não usadas no dia a dia da aula — o aluno nunca faz login.
-      CB_ADMIN_NAME: ${DBEAVER_ADMIN_USER}
-      CB_ADMIN_PASSWORD: ${DBEAVER_ADMIN_PASSWORD}
-      CB_SERVER_NAME: "Lakehouse DBeaver"
-      CB_SERVER_URL: "http://localhost:8978/"
-      # Sem isso, a conexão pré-configurada existiria mas ficaria
-      # invisível para o usuário anônimo (só o admin a veria).
-      CLOUDBEAVER_APP_GRANT_CONNECTIONS_ACCESS_TO_ANONYMOUS_TEAM: "true"
-    ports:
-      - "8978:8978"
-    volumes:
-      - dbeaver-workspace:/opt/cloudbeaver/workspace
-      # Só copiado para dentro do workspace na primeira subida (volume
-      # vazio); depois disso o CloudBeaver passa a gerenciar sua própria
-      # cópia em dbeaver-workspace, e editar este arquivo não tem mais
-      # efeito — ver README para como resetar.
-      - ./dbeaver/initial-data-sources.conf:/opt/cloudbeaver/conf/initial-data-sources.conf:ro
-      # O CloudBeaver lê este arquivo do disco a cada start, mas grava um
-      # snapshot resolvido dele dentro do volume dbeaver-workspace já no
-      # primeiro start — então editar este arquivo depois da primeira
-      # subida tem o mesmo problema do initial-data-sources.conf acima:
-      # só tem efeito resetando o volume (ver README). Desliga o ícone
-      # de chat com IA do CloudBeaver (ver comentário no topo do arquivo).
-      - ./dbeaver/cloudbeaver.conf:/opt/cloudbeaver/conf/cloudbeaver.conf:ro
 
 volumes:
-  postgres-data:
   minio-data:
-  dbeaver-workspace:
