@@ -2,22 +2,22 @@
 # LABORATÓRIO DE DATA LAKEHOUSE
 # =====================================================================
 # Sobe um lakehouse simples e pré-conectado — só armazenamento (MinIO) e
-# um pacote Python pronto (`utils`), para manter o foco didático na
-# arquitetura medalhão (bronze -> silver -> gold) sem depender de motor
-# de SQL nenhum (sem Trino, sem Hive Metastore, sem Postgres — ver
-# README, "Por que não tem mais Trino" / "Por que não tem mais
-# Postgres"):
+# Jupyter com pandas puro (sem pacote nenhum pré-instalado além das libs
+# padrão), para manter o foco didático na arquitetura medalhão
+# (bronze -> silver -> gold) sem depender de motor de SQL nenhum (sem
+# Trino, sem Hive Metastore, sem Postgres — ver README, "Por que não
+# tem mais Trino" / "Por que não tem mais Postgres"):
 #
 #   MinIO (armazenamento S3-compatível) -- é a ÚNICA peça de
 #   armazenamento/estado deste laboratório.
 #
-#   Jupyter (utils editável dentro de notebooks/) -- bronze, silver e
-#   gold nascem todas VAZIAS (só a "pasta" existe, criada pelo
-#   minio-init). Não tem pipeline nenhum rodando sozinho: tudo que
-#   existir em bronze/silver/gold é o que o aluno construiu numa célula
-#   do único notebook deste laboratório -- ver
-#   `jupyter/notebooks/investigacao.ipynb` -- tudo com pandas, sem SQL
-#   nenhum.
+#   Jupyter (pandas + s3fs, lendo/escrevendo direto no MinIO via
+#   storage_options) -- bronze, silver e gold nascem todas VAZIAS (só a
+#   "pasta" existe, criada pelo minio-init). Não tem pipeline nenhum
+#   rodando sozinho: tudo que existir em bronze/silver/gold é o que o
+#   aluno construiu numa célula do único notebook deste laboratório --
+#   ver `jupyter/notebooks/investigacao.ipynb` -- tudo com pandas, sem
+#   SQL nenhum.
 #
 # Para o aluno, o único comando necessário é:
 #   docker compose up -d
@@ -80,18 +80,14 @@ services:
 
   # -------------------------------------------------------------
   # JUPYTER — laboratório do aluno, e único lugar onde qualquer dado é
-  # construído neste projeto. Já vem com o pacote `utils` pronto:
-  # `import utils as lh` e a conexão com o MinIO já funciona. Um único
-  # notebook, `investigacao.ipynb` (o mistério — ver README) — lê os
-  # CSVs crus de `dados/`, constrói bronze do zero, e termina
-  # publicando a resposta do caso na silver. Sem pipeline nenhum pronto
-  # por trás.
-  #
-  # `utils` fica dentro de `notebooks/` de propósito (não instalado
-  # "escondido" em outro lugar da imagem): o aluno vê a pasta no
-  # explorador de arquivos do JupyterLab e pode abrir/editar o
-  # `__init__.py` — mudou algo ali, é só rodar de novo a célula do
-  # `import` (ou reiniciar o kernel).
+  # construído neste projeto. Sem pacote pré-instalado nenhum: a
+  # primeira célula do notebook monta um dict `STORAGE_OPTIONS` a partir
+  # das variáveis de ambiente `LAKEHOUSE_S3_*` abaixo, e daí em diante é
+  # só pandas puro (`pd.read_csv`/`df.to_parquet`/`pd.read_parquet`,
+  # via `s3fs`) apontando pro MinIO. Um único notebook,
+  # `investigacao.ipynb` (o mistério — ver README) — lê os CSVs crus de
+  # `dados/`, constrói bronze do zero, e termina publicando a resposta
+  # do caso na silver. Sem pipeline nenhum pronto por trás.
   #
   # `command` desliga token e senha (testado: sem isso, mesmo com
   # JUPYTER_TOKEN="" o servidor gera um token aleatório e pede login),
@@ -129,10 +125,8 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      # jupyter/notebooks/utils/ vem junto (é uma subpasta daqui) — é
-      # assim que o aluno vê e edita o pacote pelo próprio JupyterLab, e
-      # é assim que `import utils` funciona sem PYTHONPATH nenhum (ver
-      # comentário no Dockerfile).
+      # Bind mount, não copiado pra imagem — editar o notebook (ou
+      # trocar os CSVs em `dados/`) não precisa de rebuild nenhum.
       - ./jupyter/notebooks:/home/jovyan/notebooks
 
 volumes:

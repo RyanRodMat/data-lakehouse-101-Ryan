@@ -9,14 +9,12 @@ RUN pip install --no-cache-dir \
     s3fs==2024.6.1 \
     pyarrow==16.1.0
 
-# utils (o pacote com as conexões pré-configuradas) NÃO é copiado pra
-# imagem aqui — de propósito, pro aluno poder editá-lo. Ele mora em
-# jupyter/notebooks/utils no repo e chega no container só via bind
-# mount (ver docker-compose.yml, serviço `jupyter`), junto do resto de
-# ./jupyter/notebooks — o kernel roda com cwd em /home/jovyan/notebooks,
-# que já contém utils/, então `import utils` funciona sem precisar de
-# PYTHONPATH nenhum (Python inclui o cwd do processo interativo no
-# sys.path automaticamente).
+# Sem pacote nenhum pré-instalado além dessas libs — o notebook conecta
+# no MinIO direto via pandas + `s3fs` (URIs `s3://...` com
+# `storage_options`), sem nenhum código-fonte pra montar/editar. `boto3`
+# fica disponível à parte, útil pra quem quiser inspecionar o bucket
+# via `boto3.client("s3")` numa célula avulsa (ver README,
+# Troubleshooting).
 
 # A imagem base (jupyter/scipy-notebook) já vem com uma pasta "work"
 # em /home/jovyan, pensada pra quem não monta um volume próprio. Este

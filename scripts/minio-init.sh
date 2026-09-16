@@ -11,8 +11,8 @@
 #
 # Sem catálogo SQL nenhum neste projeto (ver README, "Por que não tem
 # mais Trino") — bronze/silver/gold são só prefixos de pastas com
-# Parquet, criados sozinhos por `lh.write_table(...)` na primeira vez
-# que alguém escreve ali; não precisam existir de antemão.
+# Parquet, criados sozinhos por `df.to_parquet(...)` (pandas) na
+# primeira vez que alguém escreve ali; não precisam existir de antemão.
 set -e
 
 mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
