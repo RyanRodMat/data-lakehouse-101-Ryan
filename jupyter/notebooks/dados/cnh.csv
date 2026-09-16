@@ -1,4 +1,4 @@
-id,age,height,eye_color,hair_color,gender,plate_number,car_make,car_model
+id,idade,altura,cor_olhos,cor_cabelo,genero,placa,marca_veiculo,modelo_veiculo
 100280,72,57,castanho,ruivo,masculino,P24L4U,Acura,MDX
 100460,63,72,castanho,castanho,feminino,XF02T6,Cadillac,SRX
 101029,62,74,verde,verde,feminino,VKY5KR,Scion,xB

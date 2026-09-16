@@ -1,4 +1,4 @@
-membership_id,check_in_date,check_in_time,check_out_time
+matricula_id,data_checkin,hora_entrada,hora_saida
 NL318,20180212,329,365
 NL318,20170811,469,920
 NL318,20180429,506,554

@@ -1,4 +1,4 @@
-id,person_id,name,membership_start_date,membership_status
+id,pessoa_id,nome,data_matricula,plano
 NL318,65076,Everette Koepke,20170926,ouro
 AOE21,39426,Noe Locascio,20171005,regular
 2PN28,63823,Jeromy Heitschmidt,20180215,prata
