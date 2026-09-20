@@ -34,7 +34,7 @@ services:
   # laboratório.
   # -------------------------------------------------------------
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     # Pinada numa release recente, de propósito SEM o Console clássico de
     # administração (a MinIO removeu ações administrativas do Console
     # open-source em 2025 e empurrou pra versão paga, AIStor). Não faz
@@ -63,7 +63,7 @@ services:
   # nada aqui constrói dado nenhum, é só estrutura.
   # -------------------------------------------------------------
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: data_lakehouse_101-minio-init
     depends_on:
       minio:
